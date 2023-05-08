@@ -3,6 +3,7 @@
 namespace W360\ImageStorage\Tests\Feature;
 
 
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -22,7 +23,7 @@ class UploadTest extends TestCase
      * get storage disk
      *
      * @param string $storage
-     * @return \Illuminate\Contracts\Filesystem\Filesystem
+     * @return Filesystem
      */
     protected function getDisk(string $storage)
     {
