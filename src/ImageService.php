@@ -15,7 +15,20 @@ use W360\ImageStorage\Models\ImageStorage;
  */
 class ImageService
 {
-
+    /**
+     * get storage disk
+     *
+     * @param string $storage
+     * @return \Illuminate\Contracts\Filesystem\Filesystem
+     */
+    protected function getDisk(string $storage)
+    {
+        $driver = config('filesystem.default');
+        if (config()->has('filesystem.disks.' . $storage)) {
+            $driver = $storage;
+        }
+        return Storage::disk($driver);
+    }
 
     /**
      * @param UploadedFile $image
@@ -25,21 +38,17 @@ class ImageService
      */
     private function upload(UploadedFile $image, $storage, \Closure $function)
     {
-        $disk = Storage::disk($storage);
-        $manager = new ImageManager();
-
+        $manager = new ImageManager(['gd']);
         $fileName = hexdec(uniqid()) . '.' . $image->getClientOriginalExtension();
-
         $img = $manager->make($image->getRealPath());
+        $disk = $this->getDisk($storage);
         $disk->put($storage . "/" . $fileName, $img->encode('webp'));
         $this->sizesImages($fileName, $disk, $storage, function ($sizePath, $width, $height, $quality) use ($img, $disk) {
             $image = $img->fit($width, $height)->encode('webp', $quality);
             $disk->put($sizePath, $image);
         });
-
         return $function($fileName, $storage);
     }
-
 
     /**
      * @param UploadedFile $image
@@ -49,7 +58,7 @@ class ImageService
      */
     public function create(UploadedFile $image, $storage, &$model)
     {
-        return $this->upload($image, $storage, function($fileName, $storage) use ($model) {
+        return $this->upload($image, $storage, function ($fileName, $storage) use ($model) {
             return ImageStorage::firstOrCreate([
                 'name' => $fileName,
                 'storage' => $storage,
@@ -68,9 +77,9 @@ class ImageService
      */
     public function updateOrCreate(UploadedFile $image, $storage, &$model)
     {
-        return $this->upload($image, $storage, function($fileName, $storage) use ($model) {
+        return $this->upload($image, $storage, function ($fileName, $storage) use ($model) {
             $delete = $this->delete($model);
-            if($delete) {
+            if ($delete) {
                 return ImageStorage::updateOrCreate([
                     'model_type' => get_class($model),
                     'model_id' => $model->id,
@@ -87,16 +96,15 @@ class ImageService
     }
 
     /**
-     *
-     * @param int $id
+     * @param $model
      * @return bool
      */
     public function delete($model)
     {
-        if(isset($model->storage) && isset($model->name)) {
+        if (isset($model->storage) && isset($model->name)) {
             $image = ImageStorage::where('model_id', $model->id)->where('model_type', get_class($model))->first();
             if ($image) {
-                $disk = Storage::disk($image->storage);
+                $disk = $this->getDisk($image->storage);
                 $paths = [];
                 $this->sizesImages($image->name, $disk, $image->storage, function ($sizePath) use ($paths) {
                     $paths[] = $sizePath;

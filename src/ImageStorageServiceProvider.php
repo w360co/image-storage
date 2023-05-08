@@ -2,6 +2,9 @@
 
 namespace W360\ImageStorage;
 
+use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\View\Compilers\BladeCompiler;
 
@@ -9,6 +12,8 @@ class ImageStorageServiceProvider extends ServiceProvider
 {
     /**
      * Bootstrap the application services.
+     *
+     * @return void
      */
     public function boot()
     {
@@ -17,7 +22,9 @@ class ImageStorageServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register the application services.
+     * Register any application services.
+     *
+     * @return void
      */
     public function register()
     {
@@ -62,7 +69,9 @@ class ImageStorageServiceProvider extends ServiceProvider
      */
     private function registerResources()
     {
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->publishes([
+            __DIR__ . '/../database/migrations/create_image_storages_table.php.stub' => $this->getMigrationFileName('create_image_storages_table.php'),
+        ], 'migrations');
     }
 
     /**
@@ -79,5 +88,26 @@ class ImageStorageServiceProvider extends ServiceProvider
                 __DIR__ . '/../database/migrations/' => database_path('migrations'),
             ], 'migrations');
         }
+    }
+
+    /**
+     * Returns existing migration file if found, else uses the current timestamp.
+     *
+     * @param $migrationFileName
+     * @return string
+     * @throws BindingResolutionException
+     */
+    protected function getMigrationFileName($migrationFileName): string
+    {
+        $timestamp = date('Y_m_d_His');
+
+        $filesystem = $this->app->make(Filesystem::class);
+
+        return Collection::make($this->app->databasePath().DIRECTORY_SEPARATOR.'migrations'.DIRECTORY_SEPARATOR)
+            ->flatMap(function ($path) use ($filesystem, $migrationFileName) {
+                return $filesystem->glob($path.'*_'.$migrationFileName);
+            })
+            ->push($this->app->databasePath()."/migrations/{$timestamp}_{$migrationFileName}")
+            ->first();
     }
 }

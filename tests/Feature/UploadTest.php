@@ -16,7 +16,22 @@ use W360\ImageStorage\Tests\TestCase;
 class UploadTest extends TestCase
 {
 
-    use DatabaseMigrations, RefreshDatabase;
+    use RefreshDatabase;
+
+    /**
+     * get storage disk
+     *
+     * @param string $storage
+     * @return \Illuminate\Contracts\Filesystem\Filesystem
+     */
+    protected function getDisk(string $storage)
+    {
+        $driver = config('filesystem.default');
+        if (config()->has('filesystem.disks.' . $storage)) {
+            $driver = $storage;
+        }
+        return Storage::disk($driver);
+    }
 
     /**
      * @test
@@ -33,6 +48,7 @@ class UploadTest extends TestCase
 
        $storage = 'avatars';
        Storage::fake($storage);
+       $disk = $this->getDisk($storage);
 
        $upload = UploadedFile::fake()->image('avatar.jpg');
        $userTest = factory(User::class)->create();
@@ -45,7 +61,7 @@ class UploadTest extends TestCase
        $this->assertEquals(get_class($userTest), $image->model_type,'No save model type' );
        $this->assertEquals($photo->name, $image->name,'No save image name' );
 
-       Storage::disk($photo->storage)->assertExists($photo->storage."/".$photo->name);
+       $disk->assertExists($photo->storage."/".$photo->name);
        $assetUrl = image($photo->name, $photo->storage);
        $expectedUrl = URL::to('/').Storage::disk($photo->storage)->url($photo->storage."/".$photo->name);
        $this->assertEquals($expectedUrl, $assetUrl,'Url get image not found' );
@@ -61,6 +77,7 @@ class UploadTest extends TestCase
 
         $storage = 'avatars';
         Storage::fake($storage);
+        $disk = $this->getDisk($storage);
 
         $upload = UploadedFile::fake()->image('avatar.jpg');
         $userTest = factory(User::class)->create();
@@ -72,7 +89,7 @@ class UploadTest extends TestCase
         $this->assertEquals(get_class($userTest), $image->model_type,'No save model type' );
         $this->assertEquals($photo->name, $image->name,'No save image name' );
 
-        Storage::disk($photo->storage)->assertExists($photo->storage."/".$photo->name);
+        $disk->assertExists($photo->storage."/".$photo->name);
         $assetUrl = image($photo->name, $photo->storage);
         $expectedUrl = URL::to('/').Storage::disk($photo->storage)->url($photo->storage."/".$photo->name);
         $this->assertEquals($expectedUrl, $assetUrl,'Url get image not found' );
