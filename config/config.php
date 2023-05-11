@@ -18,7 +18,7 @@ return [
     |
     */
 
-    'storage' => 'default',
+    'storage' => 'local',
 
 
     /*

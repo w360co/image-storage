@@ -6,6 +6,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\ImageManager;
+use W360\ImageStorage\Exceptions\InvalidImageFormatException;
 use W360\ImageStorage\Models\ImageStorage;
 
 /**
@@ -15,6 +16,24 @@ use W360\ImageStorage\Models\ImageStorage;
  */
 class ImageService
 {
+
+    /**
+     * support formats
+     *
+     * @var string[]
+     */
+    protected $supportFormats = [
+        "jpg",
+        "png",
+        "gif",
+        "tif",
+        "bmp",
+        "ico",
+        "psd",
+        "webp",
+        "data-url",
+    ];
+
     /**
      * get storage disk
      *
@@ -23,7 +42,7 @@ class ImageService
      */
     protected function getDisk(string $storage)
     {
-        $driver = config('filesystem.default');
+        $driver = config('image-storage.storage');
         if (config()->has('filesystem.disks.' . $storage)) {
             $driver = $storage;
         }
@@ -35,19 +54,26 @@ class ImageService
      * @param $storage
      * @param \Closure $function
      * @return mixed
+     * @throws InvalidImageFormatException
      */
     private function upload(UploadedFile $image, $storage, \Closure $function)
     {
-        $manager = new ImageManager(['gd']);
-        $fileName = hexdec(uniqid()) . '.' . $image->getClientOriginalExtension();
-        $img = $manager->make($image->getRealPath());
-        $disk = $this->getDisk($storage);
-        $disk->put($storage . "/" . $fileName, $img->encode('webp'));
-        $this->sizesImages($fileName, $disk, $storage, function ($sizePath, $width, $height, $quality) use ($img, $disk) {
-            $image = $img->fit($width, $height)->encode('webp', $quality);
-            $disk->put($sizePath, $image);
-        });
-        return $function($fileName, $storage);
+        $ext = $image->getClientOriginalExtension();
+        if(in_array($ext, $this->supportFormats)) {
+            $manager = new ImageManager(['gd']);
+            $fileName = hexdec(uniqid()) . '.' . $ext;
+            $img = $manager->make($image->getRealPath());
+            $disk = $this->getDisk($storage);
+            $disk->put($storage . "/" . $fileName, $img->encode($ext));
+            $path = $disk->path($storage . "/" . $fileName);
+            $this->sizesImages($fileName, $disk, $storage, function ($sizePath, $width, $height, $quality) use ($manager, $path, $disk, $ext) {
+                $disk->put($sizePath, $manager->make($path)->resize($width, $height,  function ($constraint) {
+                    $constraint->aspectRatio();
+                })->limitColors(255)->encode($ext, $quality));
+            });
+            return $function($fileName, $storage);
+        }
+        throw new InvalidImageFormatException('Invalid image format ('.$ext.')');
     }
 
     /**
